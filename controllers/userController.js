@@ -1,24 +1,23 @@
 import UserModel from "../models/UserModel.js";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 
 class UserController {
-  // create user
-  static async createUser(req, res) {
+  // user registration
+  static async userRegistration(req, res) {
     try {
       const { isGuestUser, userName, age, gender, email, password } = req.body;
       console.log(req.body);
 
       // check if all fields are provided
       if (isGuestUser === undefined || !userName || !age || !gender) {
-        return res
-          .status(400)
-          .json({ message: "All fields are required for isGuestUser is true" });
+        return res.status(400).json({ message: "All fields are required" });
       }
 
       // check if all fields are provided if isGuestUser is false
       if (isGuestUser === false && (!email || !password)) {
         return res.status(400).json({
-          message: "All fields are required for isGuestUser is false",
+          message: "All fields are required",
         });
       }
 
@@ -68,8 +67,55 @@ class UserController {
         data.password = hashedPassword;
       }
 
+      // create user
       const user = await UserModel.create(data);
-      res.status(201).json(user);
+
+      // generate jwt token
+      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET_KEY, {
+        expiresIn: "1d",
+      });
+
+      res
+        .status(201)
+        .json({ message: "User registered successfully", user, token });
+    } catch (err) {
+      console.log(err);
+      res.status(500).json({ message: err.message });
+    }
+  }
+
+  // user login
+  static async userLogin(req, res) {
+    try {
+      const { email, password } = req.body;
+
+      // check if all fields are provided
+      if (!email || !password) {
+        return res.status(400).json({
+          message: "All fields are required",
+        });
+      }
+
+      // find user with same email
+      const user = await UserModel.findOne({ email });
+      if (!user) {
+        return res.status(400).json({ message: "Email is not registered" });
+      }
+
+      // check if password is correct
+      const isPasswordCorrect = await bcrypt.compare(password, user.password);
+      if (!isPasswordCorrect) {
+        return res.status(400).json({ message: "Incorrect password" });
+      }
+
+      // generate jwt token
+      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET_KEY, {
+        expiresIn: "1d",
+      });
+
+      res
+        .status(200)
+        .json({ message: "User logged in successfully", user, token });
     } catch (err) {
       console.log(err);
       res.status(500).json({ message: err.message });
